@@ -1,0 +1,7 @@
+# Install a CUDA-enabled torch build separately before these packages.
+transformers==5.17.0
+accelerate==1.15.0
+bitsandbytes==0.50.2
+pillow==12.3.0
+tqdm==4.70.1
+ultralytics>=8.3.0
