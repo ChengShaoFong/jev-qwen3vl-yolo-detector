@@ -3,7 +3,7 @@ __pycache__/
 *.pt
 .DS_Store
 .venv/
-models/
+/models/
 Ultralytics/
 runs/
 weights/

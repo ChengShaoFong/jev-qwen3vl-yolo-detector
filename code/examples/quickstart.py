@@ -86,9 +86,11 @@ def interactive(model, detector, torch, Image, initial_image):
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", required=True, help="initial local image path")
-    parser.add_argument("--model", default="Qwen/Qwen3-VL-2B-Instruct")
-    parser.add_argument("--base-only", action="store_true", required=True,
-                        help="required by this base-model-only application")
+    parser.add_argument("--model", default="Qwen/Qwen3-VL-4B-Instruct")
+    parser.add_argument("--adapter", default="guanxuyu/visual-jev-4b-answer-sft",
+                        help="Visual Jev LoRA adapter; ignored with --base-only")
+    parser.add_argument("--base-only", action="store_true",
+                        help="skip the adapter and use only the Qwen base model")
     parser.add_argument("--load-in-4bit", action="store_true",
                         help="load language weights in 4-bit NF4")
     parser.add_argument("--max-pixels", type=int, default=32768)
@@ -103,6 +105,10 @@ def parse_args():
 
     if not os.path.isfile(args.image):
         parser.error(f"image not found: {args.image}")
+    if not args.base_only and args.adapter == "guanxuyu/visual-jev-4b-answer-sft" \
+            and os.path.basename(args.model.rstrip("/\\")) != "Qwen3-VL-4B-Instruct":
+        parser.error("the default Visual Jev adapter requires Qwen3-VL-4B-Instruct; "
+                     "use --base-only or select a compatible --adapter")
     if not 0.0 <= args.yolo_confidence <= 1.0:
         parser.error("--yolo-confidence must be between 0 and 1")
     if not 0.0 <= args.yolo_padding <= 1.0:
@@ -155,14 +161,18 @@ def main():
     progress.set_description("Loading Visual Jev")
     dtype = torch.float16 if device == "mps" else torch.bfloat16
     model_path = resolve_model_path(args.model)
+    adapter_path = None if args.base_only else resolve_model_path(args.adapter)
     if model_path != args.model:
         print(f"\nUsing local model: {model_path}", flush=True)
+    if adapter_path and adapter_path != args.adapter:
+        print(f"Using local adapter: {adapter_path}", flush=True)
     model = VisualJev(
         model_path,
         device=device,
         dtype=dtype,
         load_in_4bit=args.load_in_4bit,
         max_pixels=args.max_pixels,
+        adapter_path=adapter_path,
     )
     progress.update(1)
     progress.set_description("Ready")
@@ -170,6 +180,7 @@ def main():
 
     precision = "4-bit NF4" if args.load_in_4bit else str(dtype)
     print(f"Using {device} with {precision}", flush=True)
+    print(f"Visual Jev adapter: {adapter_path or 'disabled (base-only)'}", flush=True)
     interactive(model, detector, torch, Image, args.image)
 
 
