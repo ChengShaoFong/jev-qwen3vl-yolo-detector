@@ -6,7 +6,22 @@
 - 沒有偵測到人物：自動改用整張圖片判斷。
 - YOLO 預設在 CPU 執行，Visual Jev 在 CUDA 執行，減少顯示記憶體競爭。
 
-## 安裝
+## 已測試環境
+
+以下是本專案實際運行過的電腦與虛擬環境規格，供重現與選擇相容套件時參考；其他硬體配置尚未在本專案驗證。
+
+| 項目 | 規格或版本 |
+| --- | --- |
+| 作業系統 | Windows 11 |
+| 處理器 | Intel Core i7-13800H（第 13 代） |
+| 系統記憶體 | 約 16 GiB |
+| 顯示卡 | NVIDIA RTX A1000 Laptop GPU，6 GiB VRAM |
+| NVIDIA 驅動程式 | 538.18 |
+| Python | 3.12.10（`.venv`） |
+| PyTorch / torchvision | 2.7.1+cu118 / 0.22.1+cu118；CUDA 執行環境 11.8 |
+| 主要套件 | Transformers 5.17.0、Ultralytics 8.4.182、bitsandbytes 0.50.2、Accelerate 1.15.0 |
+
+## 環境建置、安裝
 
 在 Windows PowerShell 中：
 
@@ -15,8 +30,8 @@ cd D:\Vision_Jev\Visual-Jev
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
-# 依電腦上的 CUDA 版本安裝 PyTorch，再安裝其餘套件。
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+# 以下是上述已測試環境的 PyTorch 版本；其他 CUDA 環境請依 PyTorch 官方指引選擇。
+pip install torch==2.7.1 torchvision==0.22.1 --index-url https://download.pytorch.org/whl/cu118
 pip install -r code\requirements.txt
 ```
 
