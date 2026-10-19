@@ -48,7 +48,7 @@ Choices (comma-separated): green, blue, yellow, black
 
 ## YOLO 選項
 
-預設使用儲存庫內的 `yolo11n.pt`；若該檔案不存在，Ultralytics 會在首次執行時下載。信心門檻為 `0.25`，人物框周圍保留 `5%`：
+預設使用 `yolo11n.pt`。權重未包含在儲存庫中，Ultralytics 會在首次執行時自動下載並快取；後續執行會沿用本機檔案。信心門檻為 `0.25`，人物框周圍保留 `5%`：
 
 ```powershell
 --yolo-model yolo11n.pt
@@ -76,4 +76,4 @@ code/requirements.txt              Python 相依套件
 | Ultralytics YOLO11n (`yolo11n.pt`) | 偵測 `person` 類別並提供裁切座標 | [YOLO11 官方文件](https://docs.ultralytics.com/models/yolo11/) | 官方文件列出 AGPL-3.0 與 Enterprise 授權方案 |
 | Visual Jev | 候選選項的 prompt 與語言模型輸出層評分方式之程式來源 | [原始碼儲存庫](https://github.com/guanxuyu-sv/Visual-Jev) · [論文](https://arxiv.org/abs/2609.25845) | 原始碼為 Apache-2.0；本專案保留其 [LICENSE](LICENSE) |
 
-目前的固定命令使用 `--base-only`，**不會載入**原作者發布的 [Visual Jev 4B LoRA 適配器](https://huggingface.co/guanxuyu/visual-jev-4b-answer-sft)。因此，這裡的 2B 推論結果不等同於論文中 4B 微調模型的結果。本專案沒有重新訓練 Qwen 或 Visual Jev 模型；儲存庫內的 `yolo11n.pt` 為 Ultralytics 權重，使用與再散布時須遵守其授權條款。
+目前的固定命令使用 `--base-only`，**不會載入**原作者發布的 [Visual Jev 4B LoRA 適配器](https://huggingface.co/guanxuyu/visual-jev-4b-answer-sft)。因此，這裡的 2B 推論結果不等同於論文中 4B 微調模型的結果。本專案沒有重新訓練或提交上述模型權重；下載後使用時，須遵守各元件的授權條款。
