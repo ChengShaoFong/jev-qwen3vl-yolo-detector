@@ -7,23 +7,20 @@
 - 啟用 YOLO 時預設在 CPU 執行，Visual Jev 在 CUDA 執行，減少顯示記憶體競爭。
 - 多問題模式對每張裁切圖只編碼一次視覺內容與共同前綴，並用 KV 快取批次處理問題後綴；單題維持獨立推論。
 
-## Visual Jev 的決策流程
-
-**LoRA 不是在 softmax 之後才強化結果。** `guanxuyu/visual-jev-4b-answer-sft` 是原作者已完成訓練的參數增量；本專案的 `quickstart.py` 只載入它進行推論，不會重新訓練或更新權重。
+## Visual Jev Inference Pipeline
 
 ```text
-原作者的訓練階段：圖片＋問題＋選項＋正確答案
-  → 在固定的 Answer: 位置，以正確選項字母為目標訓練 LoRA
-
-本專案的推論階段：載入 Qwen3-VL-4B-Instruct＋已訓練的 LoRA
-  → 輸入圖片、問題及其候選選項
-  → LM Head 產生詞彙 logits，取出 A、B、C… 等候選字母的 logits
-  → 對該題的候選 logits 做 softmax，輸出選項分布與最高分選項
+Image / ROI + Question + Choices
+  → Qwen3-VL-4B-Instruct + Visual Jev LoRA adapter
+  → LM Head 產生 Answer: 位置的 next-token logits
+  → 取出 A、B、C… 等 option tokens 的 logits
+  → 對候選 logits 套用 softmax
+  → 輸出 normalized choice scores 與 top-scoring choice
 ```
 
-LoRA 強化的是模型產生決策分數的能力：原作者凍結視覺塔，在語言層加入可訓練的低秩參數，以 `Answer:` 位置的**完整詞彙下一 token 交叉熵**學習正確選項字母；不是用本專案顯示的候選 softmax 機率再訓練一次。詳細訓練設定見[原作者的 adapter 模型卡](https://huggingface.co/guanxuyu/visual-jev-4b-answer-sft#training)。本專案的對應程式分別是 [`vdm_model.py`](code/vdm/models/vdm_model.py)（載入 adapter、計算 LM Head 候選 logits）與 [`quickstart.py`](code/examples/quickstart.py)（候選 softmax 與輸出）。
+Visual Jev LoRA adapter 是一組針對選擇題訓練的附加權重，讓 Qwen3-VL 能根據 Image / ROI 與 Question，更準確地比較各個 Choices。它不是獨立的 classifier；本專案只在 inference 時載入使用，不會重新訓練或更新 model weights。
 
-多問題模式下，每題有自己的問題、候選答案和 softmax 分布；圖片與共同前綴則共用快取。這些機率只表示**所提供候選答案之間的相對分數**，不是經校準的真實正確率。PPE 警報應以實際場域資料驗證，不能直接把高機率當作安全保證。
+輸出的 softmax scores 只表示候選項之間的相對分數，並非 calibrated confidence，也不能直接視為實際正確率。Multi-question inference 會重用 visual prefix 與 KV cache，以減少重複運算。
 
 ## 已測試環境
 
