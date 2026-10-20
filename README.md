@@ -21,7 +21,6 @@
 | PyTorch / torchvision | 2.7.1+cu118 / 0.22.1+cu118；CUDA 執行環境 11.8 |
 | 主要套件 | Transformers 5.17.0、Ultralytics 8.4.182、bitsandbytes 0.50.2、Accelerate 1.15.0、PEFT 0.21.0 |
 
-上述硬體與套件版本是先前 **2B base-only** 模式的已測試環境；4B＋adapter 尚未在這張 6 GiB 顯示卡上完成驗證，可能發生顯示記憶體不足。
 
 ## 環境建置、安裝
 
