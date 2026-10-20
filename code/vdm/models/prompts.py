@@ -10,11 +10,12 @@ SYSTEM = (
 )
 
 
-def prefix_text() -> str:
+def prefix_text(shared_context: str = "") -> str:
+    context = f"\n{shared_context.strip()}" if shared_context.strip() else ""
     return (
         f"<|im_start|>system\n{SYSTEM}<|im_end|>\n"
         "<|im_start|>user\n"
-        "<|vision_start|><|image_pad|><|vision_end|>"
+        f"<|vision_start|><|image_pad|><|vision_end|>{context}"
     )
 
 

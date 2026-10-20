@@ -1,0 +1,23 @@
+{
+  "state": "Answer each question using only the visible image.",
+  "questions": {
+    "bottle_present": {
+      "type": "choice",
+      "instructions": "Is there a bottle in the image?",
+      "criteria": {
+        "yes": null,
+        "no": null
+      }
+    },
+    "bottle_color": {
+      "type": "choice",
+      "instructions": "What color is the bottle?",
+      "criteria": {
+        "green": null,
+        "blue": null,
+        "yellow": null,
+        "black": null
+      }
+    }
+  }
+}

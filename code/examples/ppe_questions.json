@@ -1,0 +1,55 @@
+{
+  "state": "Inspect only people visible in this image. For each PPE item, answer yes if at least one visible person clearly lacks it, even if other people wear it. Answer no only when all visible people clearly wear it. Choose unclear when the relevant body part is hidden, too small, or the image is ambiguous. Choose no person visible only when no person can be seen. Do not infer PPE that is not visible.",
+  "questions": {
+    "missing_helmet": {
+      "type": "choice",
+      "instructions": "Is any visible person missing a safety helmet or hard hat?",
+      "criteria": {
+        "yes": null,
+        "no": null,
+        "unclear": null,
+        "no person visible": null
+      }
+    },
+    "missing_safety_vest": {
+      "type": "choice",
+      "instructions": "Is any visible person missing a high-visibility safety vest?",
+      "criteria": {
+        "yes": null,
+        "no": null,
+        "unclear": null,
+        "no person visible": null
+      }
+    },
+    "missing_safety_glasses": {
+      "type": "choice",
+      "instructions": "Is any visible person missing safety glasses or protective eyewear?",
+      "criteria": {
+        "yes": null,
+        "no": null,
+        "unclear": null,
+        "no person visible": null
+      }
+    },
+    "missing_gloves": {
+      "type": "choice",
+      "instructions": "Is any visible person missing protective gloves?",
+      "criteria": {
+        "yes": null,
+        "no": null,
+        "unclear": null,
+        "no person visible": null
+      }
+    },
+    "missing_safety_footwear": {
+      "type": "choice",
+      "instructions": "Is any visible person missing protective safety footwear?",
+      "criteria": {
+        "yes": null,
+        "no": null,
+        "unclear": null,
+        "no person visible": null
+      }
+    }
+  }
+}

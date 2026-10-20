@@ -1,7 +1,8 @@
-"""Interactive YOLO person cropping followed by Visual Jev classification."""
+"""Visual Jev image classification with optional YOLO person cropping."""
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from time import perf_counter
@@ -17,17 +18,29 @@ def resolve_model_path(requested_path):
 
 
 def classify_image(model, detector, torch, Image, image_path, question, choices):
-    """Classify every detected person, or the full image when none is found."""
+    """Classify each detected person, or the full image without detections."""
+    classify_questions(model, detector, torch, Image, image_path, [(question, choices)])
+
+
+def classify_questions(
+    model, detector, torch, Image, image_path, questions,
+    *, batch_size=2, shared_context="",
+):
+    """Run all questions against each crop, sharing a crop's visual prefix."""
     with Image.open(image_path) as source:
         image = source.convert("RGB")
 
-    detections = detector.detect(image)
-    if detections:
-        print(f"YOLO found {len(detections)} person(s).", flush=True)
-        inputs = [(detection, detection.image) for detection in detections]
-    else:
-        print("YOLO found no people; running Jev on the full image.", flush=True)
+    if detector is None:
+        print("YOLO disabled; running Jev on the full image.", flush=True)
         inputs = [(None, image)]
+    else:
+        detections = detector.detect(image)
+        if detections:
+            print(f"YOLO found {len(detections)} person(s).", flush=True)
+            inputs = [(detection, detection.image) for detection in detections]
+        else:
+            print("YOLO found no people; running Jev on the full image.", flush=True)
+            inputs = [(None, image)]
 
     started = perf_counter()
     for index, (detection, input_image) in enumerate(inputs, start=1):
@@ -37,22 +50,59 @@ def classify_image(model, detector, torch, Image, image_path, question, choices)
                 f"box={detection.box} ==="
             )
 
-        logits = model.score_choices(input_image, question, choices)
-        probabilities = torch.softmax(logits.float(), dim=-1).cpu().tolist()
-        for choice, probability in zip(choices, probabilities):
-            print(f"  {choice}: {probability:.3f}")
-        prediction = choices[max(range(len(probabilities)), key=probabilities.__getitem__)]
-        print(f"  prediction: {prediction}")
+        if len(questions) == 1 and not shared_context:
+            question, choices = questions[0]
+            logits_list = [model.score_choices(input_image, question, choices)]
+        else:
+            logits_list = model.score_questions(
+                input_image, questions, batch_size=batch_size,
+                shared_context=shared_context,
+            )
+        for (question, choices), logits in zip(questions, logits_list):
+            if len(questions) > 1:
+                print(f"  Question: {question}")
+            probabilities = torch.softmax(logits.float(), dim=-1).cpu().tolist()
+            for choice, probability in zip(choices, probabilities):
+                print(f"  {choice}: {probability:.3f}")
+            prediction = choices[max(range(len(probabilities)), key=probabilities.__getitem__)]
+            print(f"  prediction: {prediction}")
 
     print(f"Inference: {perf_counter() - started:.1f}s", flush=True)
 
 
-def interactive(model, detector, torch, Image, initial_image):
-    """Keep both models loaded while accepting image/question requests."""
+def load_request_file(path):
+    """Read the original Visual Jev named-question JSON format."""
+    with open(path, encoding="utf-8") as source:
+        request = json.load(source)
+    if not isinstance(request, dict) or not isinstance(request.get("questions"), dict):
+        raise ValueError("request file needs a 'questions' object")
+    questions = []
+    for name, item in request["questions"].items():
+        if not isinstance(item, dict) or item.get("type") != "choice":
+            raise ValueError(f"question {name!r} must have type 'choice'")
+        question = item.get("instructions")
+        criteria = item.get("criteria")
+        if not isinstance(question, str) or not question.strip():
+            raise ValueError(f"question {name!r} needs instructions")
+        if not isinstance(criteria, dict) or not 2 <= len(criteria) <= 16 \
+                or any(not isinstance(choice, str) or not choice for choice in criteria):
+            raise ValueError(f"question {name!r} needs 2 to 16 named criteria")
+        questions.append((question, list(criteria)))
+    if not questions:
+        raise ValueError("request file must contain at least one question")
+    state = request.get("state", "")
+    if not isinstance(state, str):
+        raise ValueError("request state must be a string")
+    return questions, state
+
+
+def interactive(model, detector, torch, Image, initial_image, batch_size=2):
+    """Collect one or more questions per image while keeping models loaded."""
     image_path = initial_image
     print(
-        "Interactive mode: press Enter to reuse the image; "
-        "leave the question blank to quit.",
+        "Interactive mode: press Enter to reuse the image. "
+        "After adding questions, leave the next question blank to run them; "
+        "leave the first question blank to quit.",
         flush=True,
     )
     while True:
@@ -60,12 +110,6 @@ def interactive(model, detector, torch, Image, initial_image):
             new_path = input(f"Image [{image_path}]: ").strip().strip('"')
             if new_path:
                 image_path = new_path
-            question = input("Question: ").strip()
-            if not question:
-                return
-            choices = [item.strip() for item in input(
-                "Choices (comma-separated): "
-            ).split(",")]
         except (EOFError, KeyboardInterrupt):
             print()
             return
@@ -73,12 +117,32 @@ def interactive(model, detector, torch, Image, initial_image):
         if not os.path.isfile(image_path):
             print(f"Image not found: {image_path}", flush=True)
             continue
-        if not 2 <= len(choices) <= 16 or any(not choice for choice in choices):
-            print("Enter 2 to 16 non-empty choices separated by commas.", flush=True)
-            continue
+
+        questions = []
+        try:
+            while True:
+                prompt = "Question: " if not questions else "Next question [Enter to run]: "
+                question = input(prompt).strip()
+                if not question:
+                    if not questions:
+                        return
+                    break
+                choices = [item.strip() for item in input(
+                    "Choices (comma-separated): "
+                ).split(",")]
+                if not 2 <= len(choices) <= 16 or any(not choice for choice in choices):
+                    print("Enter 2 to 16 non-empty choices separated by commas.", flush=True)
+                    continue
+                questions.append((question, choices))
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
 
         try:
-            classify_image(model, detector, torch, Image, image_path, question, choices)
+            classify_questions(
+                model, detector, torch, Image, image_path, questions,
+                batch_size=batch_size,
+            )
         except (OSError, RuntimeError, ValueError) as exc:
             print(f"Could not process request: {exc}", flush=True)
 
@@ -95,8 +159,12 @@ def parse_args():
                         help="load language weights in 4-bit NF4")
     parser.add_argument("--max-pixels", type=int, default=32768)
     parser.add_argument("--device", choices=["auto", "cuda", "mps"], default="auto")
-    parser.add_argument("--interactive", action="store_true", required=True)
-    parser.add_argument("--use-yolo", action="store_true", required=True)
+    parser.add_argument("--interactive", action="store_true")
+    parser.add_argument("--request-file", help="JSON file with multiple named choice questions")
+    parser.add_argument("--question-batch-size", type=int, default=2,
+                        help="number of question suffixes per shared-cache batch")
+    parser.add_argument("--use-yolo", action="store_true",
+                        help="detect and crop people; otherwise evaluate the full image")
     parser.add_argument("--yolo-model", default="yolo11n.pt")
     parser.add_argument("--yolo-confidence", type=float, default=0.25)
     parser.add_argument("--yolo-padding", type=float, default=0.05)
@@ -105,6 +173,12 @@ def parse_args():
 
     if not os.path.isfile(args.image):
         parser.error(f"image not found: {args.image}")
+    if not args.interactive and not args.request_file:
+        args.interactive = True
+    if args.request_file and not os.path.isfile(args.request_file):
+        parser.error(f"request file not found: {args.request_file}")
+    if args.question_batch_size < 1:
+        parser.error("--question-batch-size must be positive")
     if not args.base_only and args.adapter == "guanxuyu/visual-jev-4b-answer-sft" \
             and os.path.basename(args.model.rstrip("/\\")) != "Qwen3-VL-4B-Instruct":
         parser.error("the default Visual Jev adapter requires Qwen3-VL-4B-Instruct; "
@@ -120,7 +194,7 @@ def main():
     parser, args = parse_args()
     from tqdm.auto import tqdm
 
-    progress = tqdm(total=3, desc="Importing libraries", ascii=True,
+    progress = tqdm(total=2 + int(args.use_yolo), desc="Importing libraries", ascii=True,
                     bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} stages",
                     dynamic_ncols=True)
     if sys.platform == "darwin":
@@ -130,7 +204,6 @@ def main():
     from PIL import Image
 
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from vdm.inference.person_crop import YoloPersonDetector
     from vdm.models.vdm_model import VisualJev
     progress.update(1)
 
@@ -149,14 +222,18 @@ def main():
     if args.load_in_4bit and device != "cuda":
         parser.error("--load-in-4bit requires CUDA")
 
-    progress.set_description("Loading YOLO")
-    detector = YoloPersonDetector(
-        model_path=args.yolo_model,
-        confidence=args.yolo_confidence,
-        padding=args.yolo_padding,
-        device=args.yolo_device,
-    )
-    progress.update(1)
+    detector = None
+    if args.use_yolo:
+        from vdm.inference.person_crop import YoloPersonDetector
+
+        progress.set_description("Loading YOLO")
+        detector = YoloPersonDetector(
+            model_path=args.yolo_model,
+            confidence=args.yolo_confidence,
+            padding=args.yolo_padding,
+            device=args.yolo_device,
+        )
+        progress.update(1)
 
     progress.set_description("Loading Visual Jev")
     dtype = torch.float16 if device == "mps" else torch.bfloat16
@@ -181,7 +258,18 @@ def main():
     precision = "4-bit NF4" if args.load_in_4bit else str(dtype)
     print(f"Using {device} with {precision}", flush=True)
     print(f"Visual Jev adapter: {adapter_path or 'disabled (base-only)'}", flush=True)
-    interactive(model, detector, torch, Image, args.image)
+    if args.request_file:
+        try:
+            questions, state = load_request_file(args.request_file)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            parser.error(f"invalid request file: {exc}")
+        classify_questions(
+            model, detector, torch, Image, args.image, questions,
+            batch_size=args.question_batch_size, shared_context=state,
+        )
+    if args.interactive:
+        interactive(model, detector, torch, Image, args.image,
+                    batch_size=args.question_batch_size)
 
 
 if __name__ == "__main__":
